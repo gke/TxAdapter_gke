@@ -13,4 +13,4 @@ Code may be modified using the Arduino development environment and uploaded usin
 
 http://www.rcgroups.com/forums/showthread.php?t=1954078&highlight=hubsan+adapt
 
-The TxAdapter was developed for my own use and the multicopters I have but may be of interest to others. You should track PhracturedBlue's Deviation site for additional functionality as it is not my intention to do this myself ;).
+The TXAdapter was developed for my own use and the multicopters I have but may be of interest to others. You should track PhracturedBlue's Deviation site for additional functionality as it is not my intention to do this myself ;).
