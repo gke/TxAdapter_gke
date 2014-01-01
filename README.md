@@ -1,5 +1,5 @@
-TXAdapter
-=========
+TxAdapter_gke
+=============
 
 This is an open source standalone adapter translating CPPM signals, where available, from a transmitter to Hubsan and FlySky signals. 
 
