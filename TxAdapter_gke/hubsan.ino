@@ -2,41 +2,43 @@
 /*
   Standalone Tx adapter version by Prof. G.K. Egan (gke) 2013.
  
-  Almost all of the adapter code was originally derived from the work 
-  of PhracturedBlue and others for the universal transmitter "Deviation". 
-  
-  There have been numerous modifications, and in some cases rewrites, 
-  of the original code.
-  
-  https://bitbucket.org/PhracturedBlue/deviation
-
-  The adapter requires an a7105 transceiver and an Arduino Pro Mini or similar 
-  preferably at 3.3V.  It is possible to modify the original Turnigy 9X 
-  removable Tx module using its a7105 transciever.
-
-  Pinouts are defined in config.h and the defaults are those adopted by 
-  Midelic whose source code is not open.
-  
-  http://www.rcgroups.com/forums/showthread.php?t=1954078&highlight=hubsan+adapt
+ Almost all of the adapter code was originally derived from the work 
+ of PhracturedBlue and others for the universal transmitter "Deviation". 
  
-  This project is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
+ There have been numerous modifications, and in some cases rewrites, 
+ of the original code.
  
-  Deviation is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+ https://bitbucket.org/PhracturedBlue/deviation
  
-  You should have received a copy of the GNU General Public License 
-  if not, see <http://www.gnu.org/licenses/>.
+ The adapter requires an a7105 transceiver and an Arduino Pro Mini or similar 
+ preferably at 3.3V.  It is possible to modify the original Turnigy 9X 
+ removable Tx module using its a7105 transciever.
  
-*/
+ Pinouts are defined in config.h and the defaults are those adopted by 
+ Midelic whose source code is not open.
+ 
+ http://www.rcgroups.com/forums/showthread.php?t=1954078&highlight=hubsan+adapt
+ 
+ This project is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+ Deviation is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License 
+ if not, see <http://www.gnu.org/licenses/>.
+ 
+ */
 
 const uint32_t hubsanID = 0xdb042679; // choose your own random value
 
 const uint16_t DEFAULT_VTX_FREQ = 5885;
+
+uint8_t BattVolts = 0;
 
 uint16_t hubsanVTXFreq;
 uint8_t chan;
@@ -44,6 +46,7 @@ const uint8_t hubsanAllowedChannels[] = {
   0x14, 0x1e, 0x28, 0x32, 0x3c, 0x46, 0x50, 0x5a, 0x64, 0x6e, 0x78, 0x82};
 uint32_t sessionID;
 uint8_t hubsanPacketCount;
+uint8_t hubsanTxState, hubsanRFMode;
 
 enum {
   BIND_1,
@@ -59,6 +62,10 @@ enum {
   DATA_3,
   DATA_4,
   DATA_5,
+};
+
+enum {
+  VBAT = 13
 };
 
 #define WAIT_WRITE 0x80
@@ -142,6 +149,18 @@ boolean hubsanSetup(void) {
   return (false);
 } // hubsanSetup
 
+static void hubsanUpdateTelemetry(void) {
+  uint8_t i;
+
+  if( (packet[0] == 0xe1) && a7105CRCCheck(16)) {
+    BattVolts = packet[VBAT];
+    if (BattVolts < VBAT_LVC)
+    ledToggle(100);
+    else 
+    LED_ON();
+  }
+} // hubsanUpdateTelemetry
+
 static void hubsanBuildBindPacket(uint8_t hubsanState) {
 
   packet[0] = hubsanState;
@@ -174,7 +193,7 @@ static void hubsanBuildPacket(void) {
     FLAG_LED  = 0x04
   };
 
-//#define USE_HUBSAN_H107D
+  //#define USE_HUBSAN_H107D
 
 #if defined(USE_HUBSAN_H107D)
   if(hubsanVTXFreq != DEFAULT_VTX_FREQ || hubsanPacketCount == 100) {// set vTX frequency (H107D)
@@ -200,7 +219,8 @@ static void hubsanBuildPacket(void) {
   if (hubsanPacketCount < 100) {
     packet[9] = 0x02 | FLAG_LED | FLAG_FLIP; // sends default value for the 100 first packets
     hubsanPacketCount++;
-  } else {
+  } 
+  else {
     packet[9] = 0x02;
     if(rcData[AUX1] >= 0) packet[9] |= FLAG_LED;
     if(rcData[AUX2] >= 0) packet[9] |= FLAG_FLIP;
@@ -219,6 +239,7 @@ static void hubsanBuildPacket(void) {
 
 static uint16_t hubsanUpdate(void) {
   uint8_t i;
+  uint16_t d;
 
   switch(hubsanState) {
   case BIND_1:
@@ -286,6 +307,49 @@ static uint16_t hubsanUpdate(void) {
   case DATA_3:
   case DATA_4:
   case DATA_5:
+#define USE_HUBSAN_TELEMETRY
+#if defined(USE_HUBSAN_TELEMETRY)
+    if( hubsanTxState == 0) { 
+      hubsanRFMode = A7105_TX;
+      if( hubsanState == DATA_1)
+        a7105SetPower(TXPOWER_150mW); //Keep transmit power in sync
+      hubsanBuildPacket();
+      a7105Strobe(A7105_STANDBY);
+      a7105WriteData( packet, 16, hubsanState == DATA_5 ? chan + 0x23 : chan);
+      if ( hubsanState == DATA_5)
+        hubsanState = DATA_1;
+      else
+        hubsanState++;
+      d = 3000;
+    }
+    else {
+      if( true) {//Model.proto_opts[PROTOOPTS_TELEMETRY] == TELEM_ON) {
+        if( hubsanRFMode == A7105_TX) {// switch to rx mode 3ms after packet sent
+          for( i = 0; i<10; i++) {
+            if( !(a7105ReadReg(A7105_00_MODE) & 0x01)) {// wait for tx completion
+              a7105Strobe(A7105_RX); 
+              hubsanRFMode = A7105_RX;
+              break;
+            }
+          }
+        }
+        if( hubsanRFMode == A7105_RX) { 
+          for( i=0; i<10; i++) {
+            if( !(a7105ReadReg(A7105_00_MODE) & 0x01)) { // data received
+              a7105ReadData(packet, 16);
+              hubsanUpdateTelemetry();
+              a7105Strobe(A7105_RX);
+              break;
+            }
+          }
+        }
+      }
+      d = 1000;
+    }
+    if (++hubsanTxState == 8) // 3ms + 7*1ms
+      hubsanTxState = 0;
+    return d; 
+#else
     if (DEBUG) Serial.println("w");
     hubsanBuildPacket();
     a7105WriteData(packet, 16, hubsanState == DATA_5 ? chan + 0x23 : chan);
@@ -294,6 +358,7 @@ static uint16_t hubsanUpdate(void) {
     else
       hubsanState++;
     return 10000;
+#endif
   }
   return 0;
 } // hubsanUpdate
@@ -310,6 +375,10 @@ static void hubsanInit(void) {
   hubsanVTXFreq = 0;
 
 } // hubsanInit
+
+
+
+
 
 
 

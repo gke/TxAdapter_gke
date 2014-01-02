@@ -2,17 +2,17 @@
 /*
   Standalone Tx adapter version by Prof. G.K. Egan (gke) 2013.
  
-  SPI routines adapted from UAVXPIC and Midelic's FlySky adapter.
+ SPI routines adapted from UAVXPIC and Midelic's FlySky adapter.
  
-  Deviation is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+ Deviation is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
  
-  You should have received a copy of the GNU General Public License 
-  if not, see <http://www.gnu.org/licenses/>.
+ You should have received a copy of the GNU General Public License 
+ if not, see <http://www.gnu.org/licenses/>.
  
-*/
+ */
 
 #include <Arduino.h>
 
@@ -146,6 +146,17 @@ static void a7105CRCUpdate(uint8_t len) {
 } // a7105a7105CRCUpdate
 
 
+static boolean a7105CRCCheck(uint8_t len) {
+  int16_t sum = 0;
+  uint8_t i;
+
+  for (i = 0; i < (len-1); i++)
+    sum += packet[i];
+
+  return (packet[len-1] == ((256 - (sum % 256)) & 0xff));
+} // a7105CRCCheck
+
+
 uint8_t a7105Read(void) {
   uint8_t d = 0;
   uint8_t i;
@@ -171,9 +182,9 @@ uint8_t a7105ReadReg(uint8_t a) {
 
   CS_LO();
   a7105Write(0x40 | a);
-  
+
   delayMicroseconds(4);
-  
+
   d = a7105Read();  
   CS_HI();
 
@@ -225,8 +236,9 @@ void a7105SetPower(uint8_t p) {
 
   p = constrain(p, 0, 8);  
   a7105WriteReg(A7105_28_TX_TEST, (pac[p] << 3) | tbg[p]);
-  
+
 } // a7105SetPower
+
 
 
 

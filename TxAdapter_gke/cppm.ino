@@ -2,23 +2,23 @@
 /*
   Standalone Tx adapter version by Prof. G.K. Egan (gke) 2013.
  
-  CPPM routines from UAVX.
+ CPPM routines from UAVX.
  
-  This project is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
+ This project is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
  
-  Deviation is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+ Deviation is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
  
-  You should have received a copy of the GNU General Public License 
-  if not, see <http://www.gnu.org/licenses/>.
+ You should have received a copy of the GNU General Public License 
+ if not, see <http://www.gnu.org/licenses/>.
  
-*/
- 
+ */
+
 // Rx
 
 #define WidthOK(w) ((w>=900) && (w<=2200))
@@ -83,13 +83,17 @@ void cppmGetInput(void) {
     interrupts(); 
     rcData[TxMap[chan]] = USING_HUBSAN ? constrain((v >> 2) - 247, 0, 255) :
     constrain(v - 1500 + 1497, 1000, 1994); 
-   if (DEBUG) Serial.print(rcData[TxMap[chan]]); Serial.print(" "); 
+    if (DEBUG) { 
+      Serial.print(rcData[TxMap[chan]]); 
+      Serial.print(" "); 
+    }
   }
   if (DEBUG) Serial.println();
 
   cppmNewValues = false;
 
 } // cppmGetInput
+
 
 
 

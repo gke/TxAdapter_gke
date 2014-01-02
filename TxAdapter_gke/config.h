@@ -12,7 +12,9 @@
 #define LED_ON() digitalWrite(LED_PIN, HIGH)
 #define LED_OFF() digitalWrite(LED_PIN, LOW)
 
-#define USING_HUBSAN false // digitalRead(PROTOCOL_PIN)
+#define USING_HUBSAN true // digitalRead(PROTOCOL_PIN)
+
+#define VBAT_LVC 32 // LED flashes below this voltage for Hubsan
 
 #define RC_CHANS 8
 

@@ -85,18 +85,8 @@ void loop() {
   static uint32_t UpdateuS = micros();
   uint8_t chan;
 
-
-#if defined(USE_TEST_DATA)
-  rcData[THROTTLE] = 1000;
-  rcData[YAW] = 1500;
-  rcData[ROLL] = 1500;
-  rcData[PITCH] = 1500;
-#else
-  if (cppmNewValues) {
-    ledToggle(50);
+  if (cppmNewValues) 
     cppmGetInput();
-  }
-#endif
 
   if ( micros() > UpdateuS )    
     if (USING_HUBSAN)
