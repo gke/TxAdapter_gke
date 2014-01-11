@@ -2,37 +2,37 @@
 /*
   Standalone Tx adapter version by Prof. G.K. Egan (gke) 2013.
  
-  Almost all of the adapter code was originally derived from the work 
-  of PhracturedBlue and others for the universal transmitter "Deviation". 
-  
-  There have been numerous modifications, and in some cases rewrites, 
-  of the original code.
-  
-  https://bitbucket.org/PhracturedBlue/deviation
-
-  The adapter requires an a7105 transceiver and an Arduino Pro Mini or similar 
-  preferably at 3.3V.  It is possible to modify the original Turnigy 9X 
-  removable Tx module using its a7105 transciever.
-
-  Pinouts are defined in config.h and the defaults are those adopted by 
-  Midelic whose source code is not open.
-  
-  http://www.rcgroups.com/forums/showthread.php?t=1954078&highlight=hubsan+adapt
+ Almost all of the adapter code was originally derived from the work 
+ of PhracturedBlue and others for the universal transmitter "Deviation". 
  
-  This project is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
+ There have been numerous modifications, and in some cases rewrites, 
+ of the original code.
  
-  Deviation is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+ https://bitbucket.org/PhracturedBlue/deviation
  
-  You should have received a copy of the GNU General Public License 
-  if not, see <http://www.gnu.org/licenses/>.
+ The adapter requires an a7105 transceiver and an Arduino Pro Mini or similar 
+ preferably at 3.3V.  It is possible to modify the original Turnigy 9X 
+ removable Tx module using its a7105 transciever.
  
-*/
+ Pinouts are defined in config.h and the defaults are those adopted by 
+ Midelic.
+ 
+ http://www.rcgroups.com/forums/showthread.php?t=1954078&highlight=hubsan+adapt
+ 
+ This project is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+ Deviation is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License 
+ if not, see <http://www.gnu.org/licenses/>.
+ 
+ */
 
 const uint8_t flyskyMap[] = {
   ROLL,PITCH,THROTTLE,YAW,AUX1,AUX2,AUX3,AUX4
@@ -103,8 +103,7 @@ static const uint8_t flyskyTxChannels[16][16] = {
     0x64, 0x14, 0x82, 0x32, 0x6e, 0x1e, 0x78, 0x28, 0x8c, 0x3c, 0xa0, 0x50, 0x5a, 0x0a, 0x96, 0x46                }
   ,
 };
-const uint32_t flyskyID = 0x5475c52A;
-//static const uint8_t flyskyID[] = { 0x02, 0x00, 0x00, 0x70 };
+
 static uint8_t chanrow;
 static uint8_t chancol;
 static uint8_t chanoffset;
@@ -129,7 +128,7 @@ static int flyskyInit(void) {
 
   a7105Strobe(A7105_STANDBY);
   a7105WriteReg(A7105_02_CALC,0x01);
-  while(a7105ReadReg(A7105_02_CALC)){
+  while(a7105CalDone()){
     if_calibration1 = a7105ReadReg(0x22);
     if(if_calibration1 & 0x10){//do nothing
     }
@@ -139,22 +138,22 @@ static int flyskyInit(void) {
   a7105WriteReg(A7105_26_VCO_SBCAL_II,0x3b);
   a7105WriteReg(0x0F,0x00);//channel 0
   a7105WriteReg(A7105_02_CALC,0x02);
-  while(a7105ReadReg(A7105_02_CALC)){
+  while(a7105CalDone()){
     vco_calibration0 = a7105ReadReg(A7105_25_VCO_SBCAL_I);
-    if(vco_calibration0&0x08){//do nothing
+    if(vco_calibration0 & 0x08){//do nothing
     }
   }
 
   a7105WriteReg(0x0F,0xA0);
   a7105WriteReg(A7105_02_CALC,0x02);
-  while(a7105ReadReg(A7105_02_CALC)){
+  while(a7105CalDone()){
     vco_calibration1 = a7105ReadReg(0x25);
     if(vco_calibration1 & 0x08){//do nothing
     }
   }
 
   a7105WriteReg(A7105_25_VCO_SBCAL_I,0x08);
-  a7105WriteReg(A7105_28_TX_TEST,0x1F);//set power to 1db maximum
+  a7105SetPower(TXPOWER_150mW);//set power to 1db maximum
   a7105Strobe(A7105_STANDBY);//stand-by strobe command
   
   flyskyBind();
@@ -175,7 +174,7 @@ void flyskyBind(void) {
     delay(10);
     ledToggle(500);
   }
-  LED_OFF();
+  LEDs(false);
 
 } // flyskyBind
 

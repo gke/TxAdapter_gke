@@ -1,9 +1,7 @@
 
 /*
   Standalone Tx adapter version by Prof. G.K. Egan (gke) 2013.
- 
- CPPM routines from UAVX.
- 
+  
  This project is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation, either version 3 of the License, or
@@ -62,7 +60,6 @@ void rxInt(void) {
         cppmRaw[chan] = Width;
       else 
         cppmFrameOK &= false;
-
       chan++;
     }
 } // rxInt
@@ -70,9 +67,10 @@ void rxInt(void) {
 
 void cppmGetInput(void) {
 
-  //-100% =~ 0x03e8 1000us (min)
-  //+100% =~ 0x07ca 1994us (max)
-  //Center = 0x5d9 1497us (center)
+  // FlySky
+  // -100% =~ 0x03e8 1000us (min)
+  // +100% =~ 0x07ca 1994us (max)
+  // Center = 0x5d9 1497us (center)
 
   uint8_t chan;
   int16_t v;
@@ -82,17 +80,14 @@ void cppmGetInput(void) {
     v = cppmRaw[chan];
     interrupts(); 
     rcData[TxMap[chan]] = USING_HUBSAN ? constrain((v >> 2) - 247, 0, 255) :
-    constrain(v - 1500 + 1497, 1000, 1994); 
-    if (DEBUG) { 
-      Serial.print(rcData[TxMap[chan]]); 
-      Serial.print(" "); 
-    }
+    constrain(v - 1500 + 1497, 1000, 1994);
   }
-  if (DEBUG) Serial.println();
 
   cppmNewValues = false;
 
 } // cppmGetInput
+
+
 
 
 

@@ -2,7 +2,27 @@
 /*
   Standalone Tx adapter version by Prof. G.K. Egan (gke) 2013.
  
- SPI routines adapted from UAVXPIC and Midelic's FlySky adapter.
+ Almost all of the adapter code was originally derived from the work 
+ of PhracturedBlue and others for the universal transmitter "Deviation". 
+ 
+ There have been numerous modifications, and in some cases rewrites, 
+ of the original code.
+ 
+ https://bitbucket.org/PhracturedBlue/deviation
+ 
+ The adapter requires an a7105 transceiver and an Arduino Pro Mini or similar 
+ preferably at 3.3V.  It is possible to modify the original Turnigy 9X 
+ removable Tx module using its a7105 transciever.
+ 
+ Pinouts are defined in config.h and the defaults are those adopted by 
+ Midelic.
+ 
+ http://www.rcgroups.com/forums/showthread.php?t=1954078&highlight=hubsan+adapt
+ 
+ This project is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
  
  Deviation is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -47,7 +67,7 @@
 
 #endif
 
-#define SPI_DELAY() delayMicroseconds(1) //__asm__ __volatile__("nop")
+#define SPI_DELAY() delayMicroseconds(1) // __asm__ __volatile__("nop") 
 
 void a7105Reset(void) {
 
@@ -199,13 +219,18 @@ void a7105ReadData(uint8_t *buf, uint8_t len) {
     buf[i] = a7105ReadReg(A7105_05_FIFO_DATA);
 } // a7105ReadData
 
-boolean a7105FlagDone(uint8_t a) {
+inline boolean a7105CalDone(void) {
   uint32_t TimeoutmS = millis() + 500;
 
-  while((millis() < TimeoutmS) && (a7105ReadReg(a) != 0));
+  while((millis() < TimeoutmS) && (a7105ReadReg(A7105_02_CALC) != 0));
 
   return  (millis() < TimeoutmS);
-} // a7105FlagDone
+} // a7105CalDone
+
+inline boolean a7105Done(void) {
+  
+  return (!(a7105ReadReg(A7105_00_MODE) & 0x01));
+} // a7105Done
 
 void a7105Strobe(uint8_t state) {
 
@@ -238,6 +263,7 @@ void a7105SetPower(uint8_t p) {
   a7105WriteReg(A7105_28_TX_TEST, (pac[p] << 3) | tbg[p]);
 
 } // a7105SetPower
+
 
 
 
