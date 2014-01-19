@@ -71,6 +71,9 @@ void cppmGetInput(void) {
   // -100% =~ 0x03e8 1000us (min)
   // +100% =~ 0x07ca 1994us (max)
   // Center = 0x5d9 1497us (center)
+  
+  // Hubsan
+  // ...
 
   uint8_t chan;
   int16_t v;
@@ -78,9 +81,12 @@ void cppmGetInput(void) {
   for (chan = 0; chan < RC_CHANS; chan++) {
     noInterrupts();
     v = cppmRaw[chan];
-    interrupts(); 
-    rcData[TxMap[chan]] = USING_HUBSAN ? constrain((v >> 2) - 247, 0, 255) :
-    constrain(v - 1500 + 1497, 1000, 1994);
+    interrupts();
+   switch(currProtocol) {    
+   case hubsan: rcData[TxMap[chan]] = constrain((v >> 2) - 247, 0, 255); break;
+   case flysky: rcData[TxMap[chan]] = constrain(v - 1500 + 1497, 1000, 1994); break;
+   default: break;
+   } // switch;
   }
 
   cppmNewValues = false;

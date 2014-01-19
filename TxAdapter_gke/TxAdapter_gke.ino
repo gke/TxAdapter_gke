@@ -36,9 +36,13 @@
 
 #include <avr/io.h>
 #include <avr/pgmspace.h>
-
+#include <EEPROM.h>
 #include "config.h"
 #include "a7105.h"
+
+enum {
+  hubsan, flysky, etc};
+uint8_t currProtocol;
 
 static boolean cppmNewValues = false;
 int16_t hubsanState;
@@ -51,9 +55,15 @@ int16_t rcData[RC_CHANS] = {
 
 uint8_t batteryVolts = 255;
 uint8_t rssiBackChannel = 0;
+int16_t rssi = 0;
 int16_t throttleLVCScale = 1024;
 boolean disableThrottle = false;
+boolean alarmBattery = false;
+boolean alarmRSSI = false;
 
+uint16_t ledPeriodmS = 5000;
+
+int16_t estAltitude;
 int16_t accData[3] = {
   0};
 int16_t gyroData[3] = {
@@ -66,66 +76,141 @@ int16_t debug[4] = {
   0};
 
 void Probe(void) {
-  digitalWrite(A0, LOW);
-  digitalWrite(A0, HIGH);
-  digitalWrite(A0, LOW);
+  digitalWrite(PROBE_PIN, LOW);
+  digitalWrite(PROBE_PIN, HIGH);
+  digitalWrite(PROBE_PIN, LOW);
 } // Probe
 
-void LEDs(boolean s) {
+inline void LEDs(boolean s) {
   digitalWrite(LED_PIN, s); 
   digitalWrite(LED2_PIN, s); 
 } // LEDs
 
-void Alarm(boolean active) {
-  static uint8_t ledState = 0;
+void checkAlarm(void) {
+  enum { 
+    buzzerWait, buzzerOn, buzzerOff                                   };
+  static uint8_t buzzerState = buzzerWait;
+  static uint32_t UpdatemS;
+  boolean alarmActive;
 
-  if (active) {
-    ledState = digitalRead(LED_PIN);
-    ledToggle(200);
+  alarmActive = alarmBattery || alarmRSSI; // add other alarm sources as desired
+
+  switch(buzzerState) {
+  case buzzerWait: 
+    if (alarmActive) { 
+      digitalWrite(BUZZER_PIN, LOW);
+      UpdatemS = millis() + BUZZER_ON_TIME_MS;
+      buzzerState = buzzerOn;
+    }
+    break;
+  case buzzerOn: 
+    if (!alarmActive) {
+      digitalWrite(BUZZER_PIN, HIGH);
+      buzzerState = buzzerWait;
+    }
+    else
+      if (millis() > UpdatemS) {
+        digitalWrite(BUZZER_PIN, HIGH);
+        UpdatemS = millis() + BUZZER_OFF_TIME_MS; 
+        buzzerState = buzzerOff;   
+      }
+    break;
+  case buzzerOff:
+    if ((millis() > UpdatemS) || !alarmActive) {
+      digitalWrite(BUZZER_PIN, HIGH);
+      buzzerState = buzzerWait;
+    }
+    break;
   }
-  else LEDs(ledState); 
-
 } // Alarm
 
-void ledToggle(uint16_t period) {
-  static uint32_t UpdatemS = millis();
+void checkLEDFlash(void) {
+  static uint32_t UpdatemS = millis() + ledPeriodmS;
 
   if (millis() > UpdatemS) {
     if (digitalRead(LED_PIN)) LEDs(false);
     else LEDs(true);
-    UpdatemS += period;
+    UpdatemS += ledPeriodmS;
   }
-} // ledToggle
+} // checkLEDFlash
+
+void initRF(void) {
+
+  a7105Setup();
+  switch (currProtocol) {
+  case hubsan:
+    hubsanInit(); 
+    break;
+  case flysky: 
+    flyskyInit(); 
+    break;
+  } // switch
+
+} // initRF
+
+void setProtocol(void) {
+
+  currProtocol = EEPROM.read(7);
+
+  if(!digitalRead(PROTOCOL_PIN)) {
+    switch (currProtocol ) {
+    case flysky:
+      currProtocol = hubsan;
+      ledPeriodmS = HUBSAN_LED_PERIOD_MS;
+      break;
+    default:
+    case hubsan:
+      currProtocol = flysky;
+      ledPeriodmS = FLYSKY_LED_PERIOD_MS;
+      break;
+    } // switch
+    EEPROM.write(7, currProtocol);
+  } 
+
+  if (DEBUG_PROTOCOL) {
+    Serial.print("Protocol ");
+    Serial.println(currProtocol);
+  }
+
+} // setProtocol
 
 void setup() {
-  Serial.begin(SERIAL_BAUD_RATE);
+  uint8_t p;
+
+  Serial.begin(57600);//SERIAL_BAUD_RATE);
 
   pinMode(LED_PIN, OUTPUT); 
   pinMode(LED2_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
 
-  pinMode(A0, OUTPUT);
-  pinMode(PROTOCOL_PIN, INPUT);
+  LEDs(HIGH);
+  digitalWrite(BUZZER_PIN, HIGH);
 
- // causing problems with rebinding 
- // randomSeed((uint32_t)analogRead(A1) << 10 | analogRead(A2));  
+  pinMode(PROBE_PIN, OUTPUT);
+  pinMode(PROTOCOL_PIN, INPUT_PULLUP);
 
-  a7105Setup();
+  // causing problems with rebinding 
+  // randomSeed((uint32_t)analogRead(A1) << 10 | analogRead(A2));  
 
-  if (USING_HUBSAN)
-    hubsanInit();
-  else
-    flyskyInit();
+  setProtocol();
 
   cppmInit();
+  LEDs(LOW);
+  while (!cppmNewValues) // get at least one good PPM frame
+    cppmGetInput();
+  LEDs(HIGH);
+
+  initRF(); 
 
 } // setup
+
 
 void loop() {
   static uint32_t UpdateuS = micros();
   uint32_t NowuS;
   uint8_t chan;
 
-  if (USING_HUBSAN) {
+  if (currProtocol == hubsan) {
     checkBattery();
     if (USING_MW_GUI)
       serialCom();
@@ -135,10 +220,34 @@ void loop() {
     cppmGetInput();
 
   NowuS = micros();
-  if ( NowuS > UpdateuS )    
-    UpdateuS = (USING_HUBSAN) ? NowuS +  hubsanUpdate() : NowuS +  flyskyUpdate();
+  if ( NowuS > UpdateuS )  
+    UpdateuS = (currProtocol == hubsan) ? NowuS +  hubsanUpdate() : NowuS +  flyskyUpdate();
+
+  checkAlarm();
+  checkLEDFlash();
 
 } // loop
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

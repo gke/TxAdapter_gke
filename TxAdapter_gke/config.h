@@ -3,8 +3,8 @@
 
 // User settings
 
-#define hubsanID 0x30503136 // choose your own random IDs
-#define flyskyID 0x35003136 
+#define hubsanID 0x35000001 // choose your own random IDs
+#define flyskyID 0x5475c52a
 
 // Arduino pin assignments - uses Midelic defaults
 #define CS_PIN 2 
@@ -12,14 +12,26 @@
 #define SCLK_PIN 4
 #define SDIO_PIN 5
 #define PROTOCOL_PIN 6 // for protocol selection switch
+#define BUZZER_PIN 6 // for protocol selection switch
 #define LED2_PIN A3 // binding LED - standard Arduino LED also flashes
+#define VBAT_PIN A0 // for Tx adapters with battery
 
-#define USING_HUBSAN true // digitalRead(PROTOCOL_PIN)
+#define PROBE_PIN A1 // for dubbing timing etc.
 
-//#define USE_HUBSAN_H107D
-#define DEFAULT_VTX_FREQ 5885 // 0.001GHz
+//#define USE_HUBSAN_EXTENDED // H107D LED/Flip etc control on AUX channels
+#define DEFAULT_VTX_FREQ 5885 // x0.001GHz
+
+#define USE_WLTOYS_EXTENDED false // LED/Flip etc control on AUX channels
 
 #define LVC_LIMIT 32 // 0.1V - LED flashes below this voltage for Hubsan
+
+#define BUZZER_ON_TIME_MS 200
+#define BUZZER_OFF_TIME_MS 1000
+
+// hold down switch to toggle from previous protocol
+#define BIND_LED_PERIOD_MS 100
+#define FLYSKY_LED_PERIOD_MS 2000 // slow flashing
+#define HUBSAN_LED_PERIOD_MS 500 // faster flashing
 
 #define DEBUG false
 #define DEBUG_PROTOCOL false
@@ -49,15 +61,15 @@ enum rc { // must be in this order
 };
 
 enum TxPower {
-    TXPOWER_100uW,
-    TXPOWER_300uW,
-    TXPOWER_1mW,
-    TXPOWER_3mW,
-    TXPOWER_10mW,
-    TXPOWER_30mW,
-    TXPOWER_100mW,
-    TXPOWER_150mW,
-    TXPOWER_LAST,
+  TXPOWER_100uW,
+  TXPOWER_300uW,
+  TXPOWER_1mW,
+  TXPOWER_3mW,
+  TXPOWER_10mW,
+  TXPOWER_30mW,
+  TXPOWER_100mW,
+  TXPOWER_150mW,
+  TXPOWER_LAST,
 };
 
 
@@ -101,4 +113,5 @@ const char pidnames[] PROGMEM =
 const uint8_t boxids[] PROGMEM = {
   1 << BOX_ARM
 };
+
 

@@ -219,18 +219,10 @@ void a7105ReadData(uint8_t *buf, uint8_t len) {
     buf[i] = a7105ReadReg(A7105_05_FIFO_DATA);
 } // a7105ReadData
 
-inline boolean a7105CalDone(void) {
-  uint32_t TimeoutmS = millis() + 500;
-
-  while((millis() < TimeoutmS) && (a7105ReadReg(A7105_02_CALC) != 0));
-
-  return  (millis() < TimeoutmS);
-} // a7105CalDone
-
-inline boolean a7105Done(void) {
+inline boolean a7105Busy(void) {
   
-  return (!(a7105ReadReg(A7105_00_MODE) & 0x01));
-} // a7105Done
+  return (a7105ReadReg(A7105_00_MODE) & 0x01);
+} // a7105Busy
 
 void a7105Strobe(uint8_t state) {
 

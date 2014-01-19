@@ -72,7 +72,7 @@ void checkBattery(void) { // bucket suggestion due to vlad_vy
 
     switch (lvcState) {
     case Monitor:
-      Alarm(false);
+      alarmBattery = false;
       if (batteryVolts <= LVC_LIMIT )
         lvcState = Warning;
       else
@@ -80,7 +80,7 @@ void checkBattery(void) { // bucket suggestion due to vlad_vy
           bucket += 2;
       break;
     case Warning:
-      Alarm(true);
+      alarmBattery = true;
       if (batteryVolts > LVC_LIMIT ) {
         throttleLVCScale = 1024;
         lvcState = Monitor;   

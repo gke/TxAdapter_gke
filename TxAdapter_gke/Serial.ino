@@ -275,7 +275,7 @@ void evaluateCommand() {
   case MSP_RC:
     headSerialReply(RC_CHANS * 2);
     for(i = 0; i < RC_CHANS; i++) 
-      if (USING_HUBSAN) 
+if(currProtocol == hubsan)
         serialize16((rcData[i] + 247) << 2);  
       else
         serialize16(rcData[i]);
@@ -288,7 +288,7 @@ void evaluateCommand() {
     break;
   case MSP_ALTITUDE:
     headSerialReply(6);
-    serialize32(0);//relativeAltitude);
+    serialize32(estAltitude);
     serialize16(0);//ROC);
     break;
   case MSP_ANALOG:

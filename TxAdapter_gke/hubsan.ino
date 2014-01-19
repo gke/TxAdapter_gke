@@ -82,7 +82,9 @@ void hubsanSetBindState(uint32_t ms) {
 
 boolean hubsanSetup(void) {
   uint8_t vco_current;
+  uint32_t timeoutmS;
 
+  delay(10);
   a7105Reset();
 
   a7105WriteID(0x55201041);
@@ -100,58 +102,69 @@ boolean hubsanSetup(void) {
 
   a7105Strobe(A7105_STANDBY);
 
-  a7105WriteReg(A7105_02_CALC, 1); //IF Filter Bank Calibration  
+  a7105WriteReg(A7105_02_CALC, 1);  
   vco_current = a7105ReadReg(A7105_02_CALC);
 
-  if (a7105CalDone()) {
+  timeoutmS = millis() + 500;
+  while (a7105Busy()) 
+    if (millis() > timeoutmS) return (false);
 
-    if (!( a7105ReadReg(A7105_22_IF_CALIB_I) & A7105_MASK_FBCF)) {
+  if (a7105ReadReg(A7105_22_IF_CALIB_I) & A7105_MASK_FBCF) return (false);
 
-      a7105ReadReg(A7105_24_VCO_CURCAL);
+  a7105ReadReg(A7105_24_VCO_CURCAL);
+  //a7105WriteReg(0x24, 0x13); // VCO cal. from A7105 Datasheet
+  //a7105WriteReg(0x26, 0x3b); // VCO bank cal. limits from A7105 Datasheet
 
-      //a7105WriteReg(0x24, 0x13); //Recomended VCO calibration from A7105 Datasheet
-      //a7105WriteReg(0x26, 0x3b); //VCO Bank Calibration recomended limits from A7105 Datasheet
+  a7105WriteReg(A7105_0F_CHANNEL, 0); // set channel
+  a7105WriteReg(A7105_02_CALC, 2); // VCO cal.
 
-      a7105WriteReg(A7105_0F_CHANNEL, 0); //Set Channel
-      a7105WriteReg(A7105_02_CALC, 2);  //VCO Calibration
+  timeoutmS = millis() + 500;
+  while (a7105Busy()) 
+    if (millis() > timeoutmS) return (false);
 
-      if (a7105CalDone()) {
+  if (a7105ReadReg(A7105_25_VCO_SBCAL_I) & A7105_MASK_VBCF) return (false);
 
-        if (!(a7105ReadReg(A7105_25_VCO_SBCAL_I) & A7105_MASK_VBCF)) {
+  a7105WriteReg(A7105_0F_CHANNEL, 0xa0); // set channel         
+  a7105WriteReg(A7105_02_CALC, 2); // VCO cal.
 
-          a7105WriteReg(A7105_0F_CHANNEL, 0xa0); //Set Channel         
-          a7105WriteReg(A7105_02_CALC, 2); //VCO Calibration
+  timeoutmS = millis() + 500;
+  while (a7105Busy()) 
+    if (millis() > timeoutmS) return (false);
 
-          if (a7105CalDone()) {
+  if (a7105ReadReg(A7105_25_VCO_SBCAL_I) & A7105_MASK_VBCF) return (false);
 
-            if (!(a7105ReadReg(A7105_25_VCO_SBCAL_I) & A7105_MASK_VBCF)) { 
+  //a7105WriteReg(0x25, 0x08); // reset VCO band cal.
 
-              //a7105WriteReg(0x25, 0x08); //Reset VCO Band calibration
+  a7105SetPower(TXPOWER_150mW);
+  a7105Strobe(A7105_STANDBY);
 
-              a7105SetPower(TXPOWER_150mW);
-              a7105Strobe(A7105_STANDBY);
+  return (true);
 
-              return (true);
-            }    
-          } 
-        }
-      } 
-    } 
-  }
-  return (false);
 } // hubsanSetup
 
 
-void MyBIN(uint8_t b) {
-  int8_t i;
-
-  for (i = 7; i>=0;i--) 
-    Serial.print(((b>>i)&1));
-} // MyBIN
-
 static void hubsanUpdateTelemetry(void) {
-  enum {
-    UNK0, 
+  enum Tag0xe0 {
+    TAG, 
+    ROC_MSB,
+    ROC_LSB,
+    XUNK3,
+    XUNK4, 
+    XUNK5,
+    XUNK6,
+    XUNK7,
+    XUNK8, 
+    Z_ACC_MSB, 
+    Z_ACC_LSB, 
+    YAW_GYRO_MSB, 
+    YAW_GYRO_LSB, 
+    VBAT,
+    CRC0,
+    CRC1
+  };
+
+  enum Tag0xe1 {
+    TAG1, 
     PITCH_ACC_MSB,
     PITCH_ACC_LSB,
     ROLL_ACC_MSB,
@@ -164,43 +177,68 @@ static void hubsanUpdateTelemetry(void) {
     ROLL_GYRO_LSB, 
     UNK11,
     UNK12,  
-    VBAT,
-    CRC0,
-    CRC1
+    //VBAT,
+    //CRC0,
+    //CRC1
   };
 
   uint8_t i;
   static uint32_t lastUpdatemS = millis();
   uint16_t intervalmS;
 
-  if( (packet[0] == 0xe1) && a7105CRCCheck(16)) {
+  if( a7105CRCCheck(16)) {
     intervalmS = millis() - lastUpdatemS;
     lastUpdatemS = millis();
 
-    batteryVolts = packet[VBAT]; 
+    if (USING_MW_GUI)
+      switch (packet[0]) {
+      case 0xe0:
+        estAltitude = -(packet[ROC_MSB] << 8 | packet[ROC_LSB]);// 1,2
+        debug[0] = packet[3] << 8 | packet[4];
+        debug[1] = packet[5] << 8 | packet[6]; 
+        debug[2] = packet[7] << 8 | packet[8]; 
+        accData[YAW] = packet[Z_ACC_MSB] << 8 | packet[Z_ACC_LSB]; // OK
+        gyroData[YAW] = packet[YAW_GYRO_MSB] << 8 | packet[YAW_GYRO_LSB]; 
+        batteryVolts = packet[VBAT];
+        break;
+      case 0xe1:
+        accData[PITCH] = packet[PITCH_ACC_MSB] << 8 | packet[PITCH_ACC_LSB];  
+        accData[ROLL] = packet[ROLL_ACC_MSB] << 8 | packet[ROLL_ACC_LSB]; 
 
-    if (USING_MW_GUI) {
-      accData[PITCH] = packet[PITCH_ACC_MSB] << 8 | packet[PITCH_ACC_LSB];  
-      accData[ROLL] = packet[ROLL_ACC_MSB] << 8 | packet[ROLL_ACC_LSB]; 
+        gyroData[PITCH] = packet[PITCH_GYRO_MSB] << 8 | packet[PITCH_GYRO_LSB]; 
+        gyroData[ROLL] = packet[ROLL_GYRO_MSB] << 8 | packet[ROLL_GYRO_LSB]; 
 
-      gyroData[PITCH] = packet[PITCH_GYRO_MSB] << 8 | packet[PITCH_GYRO_LSB]; 
-      gyroData[ROLL] = packet[ROLL_GYRO_MSB] << 8 | packet[ROLL_GYRO_LSB]; 
-
-      // use acc as angle alias
-      angle[PITCH] = accData[PITCH];
-      angle[ROLL] = -accData[ROLL];
-    } 
+        // use acc as angle alias
+        angle[PITCH] = accData[PITCH];
+        angle[ROLL] = -accData[ROLL];
+        batteryVolts = packet[VBAT];
+        break;
+      default:
+        break;
+      }  
     else 
       if (DEBUG) {
-      for (i = 0; i < 14;i++) {
-        MyBIN(packet[i]);
-        Serial.print(" ");
+      //  if(packet[0] == 0xe0) {
+      Serial.print(millis());
+      Serial.print(",");
+      Serial.print(packet[0], HEX);
+      Serial.print(",");
+      for (i = 1;i<12;i+=2) {
+        Serial.print(packet[i] << 8 | packet[i+1]); 
+        Serial.print(",");
       }
+      Serial.print(packet[11]);  
+      Serial.print(",");    
+      Serial.print(packet[12]);
+      Serial.print(",");
+      Serial.print(packet[13]); 
       Serial.println();
-    } 
-    else 
-    {    
+      //   } 
+    }
+    else {    
       Serial.print(intervalmS);
+      Serial.print(" ");
+      Serial.print(rssi);  
       Serial.print(" ");
       Serial.print(rssiBackChannel);  
       Serial.print(" ");
@@ -211,7 +249,6 @@ static void hubsanUpdateTelemetry(void) {
       Serial.println(((uint32_t)throttleLVCScale * 100) >> 10);
     }
   }
-
 } // hubsanUpdateTelemetry
 
 static void hubsanBuildBindPacket(uint8_t hubsanState) {
@@ -241,7 +278,7 @@ static void hubsanBuildPacket(void) {
 
   memset(packet, 0, 16);
 
-#define VTX_STEP_SIZE "5"
+#define VTX_STEP_SIZE 15
   enum{
     FLAG_FLIP = 0x08,
     FLAG_LED  = 0x04,
@@ -250,9 +287,8 @@ static void hubsanBuildPacket(void) {
 
   currentThrottle = disableThrottle ? 0 : ((int32_t)rcData[THROTTLE] * throttleLVCScale) >> 10;
 
-#if defined(USE_HUBSAN_H107D)
-  if(hubsanVTXFreq != DEFAULT_VTX_FREQ || hubsanPacketCount == 100) {// set vTX frequency (H107D)
-    hubsanVTXFreq = DEFAULT_VTX_FREQ;
+#if defined(USE_HUBSAN_EXTENDED)
+  if( hubsanPacketCount == 100 ) {// set vTX frequency (H107D)
     packet[0] = 0x40;
     packet[1] = (hubsanVTXFreq >> 8) & 0xff;
     packet[2] = hubsanVTXFreq & 0xff;
@@ -301,6 +337,7 @@ static uint16_t hubsanUpdate(void) {
   static uint8_t polls, i;
 
   switch(hubsanState) {
+    ledPeriodmS = BIND_LED_PERIOD_MS;
   case BIND_1:
   case BIND_3:
   case BIND_5:
@@ -315,7 +352,7 @@ static uint16_t hubsanUpdate(void) {
   case BIND_3 | WAIT_WRITE:
   case BIND_5 | WAIT_WRITE:
   case BIND_7 | WAIT_WRITE:
-    if (!a7105Done()) // check for completion
+    if (a7105Busy()) // check for completion
       if (DEBUG_PROTOCOL) Serial.println("pwf");
     a7105Strobe(A7105_RX);
     hubsanState &= ~WAIT_WRITE;
@@ -325,7 +362,7 @@ static uint16_t hubsanUpdate(void) {
   case BIND_2:
   case BIND_4:
   case BIND_6:
-    if (!a7105Done()) {
+    if (a7105Busy()) {
       if (DEBUG_PROTOCOL) Serial.println("ns");
       hubsanState = BIND_1; 
       d = 4500; // No signal, restart binding procedure.  12mS elapsed since last write
@@ -339,7 +376,7 @@ static uint16_t hubsanUpdate(void) {
     }
     break;
   case BIND_8:
-    if (!a7105Done()) {
+    if (a7105Busy()) {
       if (DEBUG_PROTOCOL) Serial.println("nr");
       hubsanState = BIND_7;
       d = 15000; // 22.5mS elapsed since last write
@@ -360,6 +397,7 @@ static uint16_t hubsanUpdate(void) {
     }
     break;
   case DATA_1:
+    ledPeriodmS = HUBSAN_LED_PERIOD_MS;
     a7105SetPower(TXPOWER_150mW); // keep transmit power in sync
   case DATA_2:
   case DATA_3:
@@ -374,18 +412,20 @@ static uint16_t hubsanUpdate(void) {
       telemetryState = waitTx;
       break;
     case waitTx: 
-      if(a7105Done()) { // wait for tx completion
+      if(a7105Busy())
+        d = 0;
+      else { // wait for tx completion
         Probe();
         a7105Strobe(A7105_RX);
         polls = 0; 
         telemetryState = pollRx;
         d = 3000; // nominal rx time
       } 
-      else 
-        d = 0;
       break;
     case pollRx: // check for telemetry
-      if(a7105Done()) { 
+      if(a7105Busy()) 
+        d = 1000;
+      else { 
         Probe();
         a7105ReadData(packet, 16);
         rssiBackChannel = a7105ReadReg(A7105_1D_RSSI_THOLD);
@@ -393,8 +433,6 @@ static uint16_t hubsanUpdate(void) {
         a7105Strobe(A7105_RX);
         d = 1000; 
       }
-      else
-        d = 1000;
 
       if (++polls >= 7) { // 3ms + 3mS + 4*1ms
         if (hubsanState == DATA_5) 
@@ -408,133 +446,45 @@ static uint16_t hubsanUpdate(void) {
     break;
   }
 
-  return d;
+  return (d);
 } // hubsanUpdate
 
-static uint16_t hubsanUpdateOriginal(void)
-{
-  static uint8_t txState = 0;
-  static int delay = 0;
-  static uint8_t rfMode=0;
-  int i;
-  switch(hubsanState) {
-  case BIND_1:
-  case BIND_3:
-  case BIND_5:
-  case BIND_7:
-    hubsanBuildBindPacket(hubsanState == BIND_7 ? 9 : (hubsanState == BIND_5 ? 1 : hubsanState + 1 - BIND_1));
-    a7105Strobe(A7105_STANDBY);
-    a7105WriteData(packet, 16, chan);
-    hubsanState |= WAIT_WRITE;
-    return 3000;
-  case BIND_1 | WAIT_WRITE:
-  case BIND_3 | WAIT_WRITE:
-  case BIND_5 | WAIT_WRITE:
-  case BIND_7 | WAIT_WRITE:
-    //wait for completion
-    for(i = 0; i< 20; i++) {
-      if(! (a7105ReadReg(A7105_00_MODE) & 0x01))
-        break;
-    }
-    //if (i == 20)
-    //    printf("Failed to complete write\n");
-    a7105Strobe(A7105_RX);
-    hubsanState &= ~WAIT_WRITE;
-    hubsanState++;
-    return 4500; //7.5msec elapsed since last write
-  case BIND_2:
-  case BIND_4:
-  case BIND_6:
-    if(a7105ReadReg(A7105_00_MODE) & 0x01) {
-      hubsanState = BIND_1;
-      return 4500; //No signal, restart binding procedure.  12msec elapsed since last write
-    }
-    a7105ReadData(packet, 16);
-    hubsanState++;
-    if (hubsanState == BIND_5)
-      a7105WriteID((packet[2] << 24) | (packet[3] << 16) | (packet[4] << 8) | packet[5]);
-
-    return 500;  //8msec elapsed time since last write;
-  case BIND_8:
-    if(a7105ReadReg(A7105_00_MODE) & 0x01) {
-      hubsanState = BIND_7;
-      return 15000; //22.5msec elapsed since last write
-    }
-    a7105ReadData(packet, 16);
-    if(packet[1] == 9) {
-      hubsanState = DATA_1;
-      a7105WriteReg(A7105_1F_CODE_I, 0x0F);
-      hubsanSetBindState(0);
-      return 28000; //35.5msec elapsed since last write
-    } 
-    else {
-      hubsanState = BIND_7;
-      return 15000; //22.5 msec elapsed since last write
-    }
-  case DATA_1:
-  case DATA_2:
-  case DATA_3:
-  case DATA_4:
-  case DATA_5:
-    if( txState == 0) { // send packet
-      rfMode = A7105_TX;
-      if( hubsanState == DATA_1)
-        a7105SetPower( TXPOWER_150mW); //Keep transmit power in sync
-      hubsanBuildPacket();
-      a7105Strobe(A7105_STANDBY);
-      a7105WriteData( packet, 16, hubsanState == DATA_5 ? chan + 0x23 : chan);
-      if (hubsanState == DATA_5)
-        hubsanState = DATA_1;
-      else
-        hubsanState++;
-      delay=3000;
-    }
-    else {
-      if(true) { //Model.proto_opts[PROTOOPTS_TELEMETRY] == TELEM_ON) {
-        if( rfMode == A7105_TX) {// switch to rx mode 3ms after packet sent
-          for( i=0; i<10; i++)
-          {
-            if( !(a7105ReadReg(A7105_00_MODE) & 0x01)) {// wait for tx completion
-              a7105Strobe(A7105_RX); 
-              rfMode = A7105_RX;
-              break;
-            }
-          }
-        }
-        if( rfMode == A7105_RX) { // check for telemetry frame
-          for( i=0; i<10; i++) {
-            if( !(a7105ReadReg(A7105_00_MODE) & 0x01)) { // data received
-              a7105ReadData(packet, 16);
-              hubsanUpdateTelemetry();
-              a7105Strobe(A7105_RX);
-              break;
-            }
-          }
-        }
-      }
-      delay=1000;
-    }
-    if (++txState == 8) // 3ms + 7*1ms
-      txState = 0;
-    return delay;
-  }
-  return 0;
-} // hubsanUpdateOriginal
-
 static void hubsanInit(void) {
-  uint32_t a,b;
-  while (!hubsanSetup());
-  a = random();
-  b = random();
-  Serial.println(a);
-  Serial.println(b);
-  sessionID = a;
-  chan = hubsanAllowedChannels[b % sizeof(hubsanAllowedChannels)];
+
+  ledPeriodmS = BIND_LED_PERIOD_MS;
+  while (!hubsanSetup()) 
+    checkLEDFlash();
+
+  if (DEBUG) Serial.println("Hubsan Setup OK");
+  
+  sessionID = random();
+  chan = hubsanAllowedChannels[random() % sizeof(hubsanAllowedChannels)];
   hubsanSetBindState(0xffffffff);
   hubsanState = BIND_1;
   hubsanPacketCount = 0;
-  hubsanVTXFreq = 0;
+  hubsanVTXFreq = DEFAULT_VTX_FREQ;
 
 } // hubsanInit
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
