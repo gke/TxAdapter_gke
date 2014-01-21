@@ -48,9 +48,8 @@
 #define  SCK_LO() PORTD &= ~(1<<SCLK_PIN)
 #define  SDIO_HI() PORTD |= (1<<SDIO_PIN)
 #define  SDIO_LO() PORTD &= ~(1<<SDIO_PIN)
-//
-#define  SDIO_1() (PIND & (1<<SDIO_PIN)) == (1<<SDIO_PIN)
-#define  SDIO_0() (PIND & (1<<SDIO_PIN)) == 0x00
+
+#define  SDIO_IS_HI() (PIND & (1<<SDIO_PIN)) == (1<<SDIO_PIN)
 
 #else
 
@@ -62,32 +61,33 @@
 #define  SDIO_HI() digitalWrite(SDIO_PIN, HIGH)
 #define  SDIO_LO() digitalWrite(SDIO_PIN, LOW)
 
-#define  SDIO_1 digitalRead(SDIO_PIN) == 0x20
-#define  SDIO_0 digitalRead(SDIO_PIN) == 0x00
+#define  SDIO_IS_HI digitalRead(SDIO_PIN)
 
 #endif
 
 #define SPI_DELAY() delayMicroseconds(1) // __asm__ __volatile__("nop") 
 
+#define a7105SetTimeout() timeoutuS = micros() + 1000  // datasheet ~700uS
+
 void a7105Reset(void) {
 
-  a7105WriteReg(0x00, 0x00);
+  delay(20); // wait for A7105 wakeup
+  a7105WriteReg(0, 0);
   delay(1);
 } // a7105Reset
 
-void a7105Setup(void) {
+void a7105SetupSPI(void) {
 
   pinMode(SDIO_PIN, OUTPUT); 
   pinMode(SCLK_PIN, OUTPUT);
   pinMode(CS_PIN, OUTPUT);
   CS_HI();
   SDIO_HI();
-  SCK_LO();
-
-  a7105Reset(); 
-} // a7105Setup
+  SCK_LO(); 
+} // a7105SetupSPI
 
 void a7105WriteID(uint32_t id) {
+
   CS_LO();
   a7105Write(A7105_06_ID_DATA);
   a7105Write((id >> 24) & 0xff); 
@@ -97,24 +97,25 @@ void a7105WriteID(uint32_t id) {
   CS_HI();
 } //a7105WriteID
 
-void a7105ReadID(void) {
+uint32_t a7105ReadID(void) {
   uint8_t i;
+  uint32_t id = 0;
 
   CS_LO();
   a7105Write(0x40 | A7105_06_ID_DATA);
-  if (DEBUG)
-    for(i = 0; i < 4; i++)
-      checkID[i] = a7105Read();
+  for (i = 0; i < 4; i++)
+    id = (id << 8) | a7105Read();
   CS_HI();
+  return (id);
 } // a7105ReadID
 
 void a7105Write(uint8_t c) {  
-  uint8_t n=8; 
+  uint8_t n = 8; 
 
   SCK_LO();
   SDIO_LO();
   while(n--) {
-    if(c & 0x80)
+    if (c & 0x80)
       SDIO_HI();
     else 
       SDIO_LO();
@@ -127,6 +128,7 @@ void a7105Write(uint8_t c) {
 } // a7105Write
 
 void a7105WriteReg(uint8_t a, uint8_t d) {
+
   CS_LO();
   a7105Write(a); 
   SPI_DELAY();
@@ -134,7 +136,7 @@ void a7105WriteReg(uint8_t a, uint8_t d) {
   CS_HI();
 } // a7105WriteReg 
 
-void a7105WriteData(uint8_t *buf, uint8_t len, uint8_t chan) {
+void a7105WriteData(uint8_t *b, uint8_t len, uint8_t chan) {
   uint8_t i;
 
   // pinMode(SDIO, OUTPUT);
@@ -143,12 +145,12 @@ void a7105WriteData(uint8_t *buf, uint8_t len, uint8_t chan) {
   a7105Write(A7105_RST_WRPTR); 
   a7105Write(A7105_05_FIFO_DATA); 
   for (i = 0; i < len; i++)
-    a7105Write(buf[i]); 
+    a7105Write(b[i]); 
   SCK_LO();
   CS_HI();
   //pinMode(SDIO, INPUT);
 
-  a7105WriteReg(0x0f, chan); // set the channel
+  a7105WriteReg(0x0f, chan); 
 
   CS_LO();
   a7105Write(A7105_TX);
@@ -183,8 +185,8 @@ uint8_t a7105Read(void) {
 
   pinMode(SDIO_PIN, INPUT);
   //SDIO_HI();
-  for(i = 0; i < 8; i++) {                    
-    if(SDIO_1()) 
+  for (i = 0; i < 8; i++) {                    
+    if (SDIO_IS_HI()) 
       d = (d << 1) | 0x01;
     else
       d = d << 1;
@@ -202,26 +204,24 @@ uint8_t a7105ReadReg(uint8_t a) {
 
   CS_LO();
   a7105Write(0x40 | a);
-
-  delayMicroseconds(4);
-
+  delayMicroseconds(4); // could be less?
   d = a7105Read();  
   CS_HI();
 
   return(d); 
 } // a7105ReadReg
 
-void a7105ReadData(uint8_t *buf, uint8_t len) {
+void a7105ReadData(uint8_t *b, uint8_t len) {
   uint8_t i;
 
   a7105Strobe(A7105_RST_RDPTR); 
-  for(i = 0; i < len; i++) 
-    buf[i] = a7105ReadReg(A7105_05_FIFO_DATA);
+  for (i = 0; i < len; i++) 
+    b[i] = a7105ReadReg(A7105_05_FIFO_DATA);
 } // a7105ReadData
 
 inline boolean a7105Busy(void) {
-  
-  return (a7105ReadReg(A7105_00_MODE) & 0x01);
+
+  return (a7105ReadReg(A7105_00_MODE) & 1);
 } // a7105Busy
 
 void a7105Strobe(uint8_t state) {
@@ -233,7 +233,7 @@ void a7105Strobe(uint8_t state) {
 
 void a7105SetPower(uint8_t p) {
   /*
-   Power amp is ~+16dBm so:
+   Power amp is +/-16dBm so:
    TXPOWER_100uW  = -23dBm == PAC=0 TBG=0
    TXPOWER_300uW  = -20dBm == PAC=0 TBG=1
    TXPOWER_1mW    = -16dBm == PAC=0 TBG=2
@@ -255,6 +255,8 @@ void a7105SetPower(uint8_t p) {
   a7105WriteReg(A7105_28_TX_TEST, (pac[p] << 3) | tbg[p]);
 
 } // a7105SetPower
+
+
 
 
 

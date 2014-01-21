@@ -1,7 +1,8 @@
 #ifndef _IFACE_A7105_H_
 #define _IFACE_A7105_H_
 
-#define A7105_RESCALE(v, n, m) v
+//#define A7105_RESCALE(v, n, m) v
+
 
 enum A7105_State {
     A7105_SLEEP     = 0x80,

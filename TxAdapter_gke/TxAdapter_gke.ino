@@ -61,6 +61,9 @@ boolean disableThrottle = false;
 boolean alarmBattery = false;
 boolean alarmRSSI = false;
 
+boolean enableLEDs = true;
+boolean enableFlip = true;
+
 uint16_t ledPeriodmS = 5000;
 
 int16_t estAltitude;
@@ -73,7 +76,8 @@ int16_t magADC[3] = {
 int16_t angle[3] = {
   0};
 int16_t debug[4] = {
-  0};
+  0,0,0,0
+};
 
 void Probe(void) {
   digitalWrite(PROBE_PIN, LOW);
@@ -88,9 +92,9 @@ inline void LEDs(boolean s) {
 
 void checkAlarm(void) {
   enum { 
-    buzzerWait, buzzerOn, buzzerOff                                   };
+    buzzerWait, buzzerOn, buzzerOff                                     };
   static uint8_t buzzerState = buzzerWait;
-  static uint32_t UpdatemS;
+  static uint32_t updatemS;
   boolean alarmActive;
 
   alarmActive = alarmBattery || alarmRSSI; // add other alarm sources as desired
@@ -99,7 +103,7 @@ void checkAlarm(void) {
   case buzzerWait: 
     if (alarmActive) { 
       digitalWrite(BUZZER_PIN, LOW);
-      UpdatemS = millis() + BUZZER_ON_TIME_MS;
+      updatemS = millis() + BUZZER_ON_TIME_MS;
       buzzerState = buzzerOn;
     }
     break;
@@ -109,14 +113,14 @@ void checkAlarm(void) {
       buzzerState = buzzerWait;
     }
     else
-      if (millis() > UpdatemS) {
+      if (millis() > updatemS) {
         digitalWrite(BUZZER_PIN, HIGH);
-        UpdatemS = millis() + BUZZER_OFF_TIME_MS; 
+        updatemS = millis() + BUZZER_OFF_TIME_MS; 
         buzzerState = buzzerOff;   
       }
     break;
   case buzzerOff:
-    if ((millis() > UpdatemS) || !alarmActive) {
+    if ((millis() > updatemS) || !alarmActive) {
       digitalWrite(BUZZER_PIN, HIGH);
       buzzerState = buzzerWait;
     }
@@ -125,18 +129,18 @@ void checkAlarm(void) {
 } // Alarm
 
 void checkLEDFlash(void) {
-  static uint32_t UpdatemS = millis() + ledPeriodmS;
+  static uint32_t updatemS = millis() + ledPeriodmS;
 
-  if (millis() > UpdatemS) {
+  if (millis() > updatemS) {
     if (digitalRead(LED_PIN)) LEDs(false);
     else LEDs(true);
-    UpdatemS += ledPeriodmS;
+    updatemS += ledPeriodmS;
   }
 } // checkLEDFlash
 
 void initRF(void) {
 
-  a7105Setup();
+  a7105SetupSPI();
   switch (currProtocol) {
   case hubsan:
     hubsanInit(); 
@@ -152,7 +156,7 @@ void setProtocol(void) {
 
   currProtocol = EEPROM.read(7);
 
-  if(!digitalRead(PROTOCOL_PIN)) {
+  if (!digitalRead(PROTOCOL_PIN)) {
     switch (currProtocol ) {
     case flysky:
       currProtocol = hubsan;
@@ -227,6 +231,7 @@ void loop() {
   checkLEDFlash();
 
 } // loop
+
 
 
 
