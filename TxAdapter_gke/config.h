@@ -18,10 +18,8 @@
 
 #define PROBE_PIN A1 // for dubbing timing etc.
 
-//#define USE_HUBSAN_EXTENDED // H107D LED/Flip etc control on AUX channels
-#define DEFAULT_VTX_FREQ 5885 // x0.001GHz 5725:5995 steps of 5
-#define HUBSAN_LEDS_BIT 2
-#define HUBSAN_FLIP_BIT 3   
+#define USE_HUBSAN_EXTENDED true // H107D LED/Flip etc control on AUX channels
+#define DEFAULT_VTX_FREQ 5885 // x0.001GHz
 
 #define USE_WLTOYS_EXTENDED false // LED/Flip etc control on AUX channels
 
@@ -50,6 +48,14 @@
 #define LED_PIN 13 // Arduino SCK pin LED - don't change
 
 #define RC_CHANS 8
+
+#define HUBSAN_RC_MIN 0
+#define HUBSAN_RC_MAX 255
+#define HUBSAN_RC_NEUTRAL 127 // ???
+
+#define FLYSKY_RC_MIN 1000
+#define FLYSKY_RC_MAX 1994
+#define FLYSKY_RC_NEUTRAL 1497
 
 enum rc { // must be in this order
   ROLL,
@@ -91,16 +97,12 @@ enum pid {
 
 enum box {
   BOX_ARM,
-  BOX_FLIP,
-  BOX_LEDS,
   CHECKBOX_ITEMS
 };
 
 
 const char boxnames[] PROGMEM = // names for dynamic generation of config GUI
 "ARM;"
-"FLIP;"
-"LEDS;"
 ;
 
 const char pidnames[] PROGMEM =
@@ -117,9 +119,7 @@ const char pidnames[] PROGMEM =
 ;
 
 const uint8_t boxids[] PROGMEM = {
-  1 << BOX_ARM,
-  1 << BOX_FLIP,
-  1 << BOX_LEDS
+  1 << BOX_ARM
 };
 
 

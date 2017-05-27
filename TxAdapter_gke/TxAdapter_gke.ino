@@ -43,6 +43,7 @@
 enum {
   hubsan, flysky, etc};
 uint8_t currProtocol;
+uint32_t sessionID;
 
 static boolean cppmNewValues = false;
 int16_t hubsanState;
@@ -61,9 +62,6 @@ boolean disableThrottle = false;
 boolean alarmBattery = false;
 boolean alarmRSSI = false;
 
-boolean enableLEDs = true;
-boolean enableFlip = true;
-
 uint16_t ledPeriodmS = 5000;
 
 int16_t estAltitude;
@@ -76,8 +74,7 @@ int16_t magADC[3] = {
 int16_t angle[3] = {
   0};
 int16_t debug[4] = {
-  0,0,0,0
-};
+  0};
 
 void Probe(void) {
   digitalWrite(PROBE_PIN, LOW);
@@ -92,9 +89,9 @@ inline void LEDs(boolean s) {
 
 void checkAlarm(void) {
   enum { 
-    buzzerWait, buzzerOn, buzzerOff                                     };
+    buzzerWait, buzzerOn, buzzerOff                                   };
   static uint8_t buzzerState = buzzerWait;
-  static uint32_t updatemS;
+  static uint32_t UpdatemS;
   boolean alarmActive;
 
   alarmActive = alarmBattery || alarmRSSI; // add other alarm sources as desired
@@ -103,7 +100,7 @@ void checkAlarm(void) {
   case buzzerWait: 
     if (alarmActive) { 
       digitalWrite(BUZZER_PIN, LOW);
-      updatemS = millis() + BUZZER_ON_TIME_MS;
+      UpdatemS = millis() + BUZZER_ON_TIME_MS;
       buzzerState = buzzerOn;
     }
     break;
@@ -113,14 +110,14 @@ void checkAlarm(void) {
       buzzerState = buzzerWait;
     }
     else
-      if (millis() > updatemS) {
+      if (millis() > UpdatemS) {
         digitalWrite(BUZZER_PIN, HIGH);
-        updatemS = millis() + BUZZER_OFF_TIME_MS; 
+        UpdatemS = millis() + BUZZER_OFF_TIME_MS; 
         buzzerState = buzzerOff;   
       }
     break;
   case buzzerOff:
-    if ((millis() > updatemS) || !alarmActive) {
+    if ((millis() > UpdatemS) || !alarmActive) {
       digitalWrite(BUZZER_PIN, HIGH);
       buzzerState = buzzerWait;
     }
@@ -129,18 +126,18 @@ void checkAlarm(void) {
 } // Alarm
 
 void checkLEDFlash(void) {
-  static uint32_t updatemS = millis() + ledPeriodmS;
+  static uint32_t UpdatemS = millis() + ledPeriodmS;
 
-  if (millis() > updatemS) {
+  if (millis() > UpdatemS) {
     if (digitalRead(LED_PIN)) LEDs(false);
     else LEDs(true);
-    updatemS += ledPeriodmS;
+    UpdatemS += ledPeriodmS;
   }
 } // checkLEDFlash
 
 void initRF(void) {
 
-  a7105SetupSPI();
+  a7105Setup();
   switch (currProtocol) {
   case hubsan:
     hubsanInit(); 
@@ -156,7 +153,7 @@ void setProtocol(void) {
 
   currProtocol = EEPROM.read(7);
 
-  if (!digitalRead(PROTOCOL_PIN)) {
+  if(!digitalRead(PROTOCOL_PIN)) {
     switch (currProtocol ) {
     case flysky:
       currProtocol = hubsan;
@@ -196,14 +193,15 @@ void setup() {
   // causing problems with rebinding 
   // randomSeed((uint32_t)analogRead(A1) << 10 | analogRead(A2));  
 
-  setProtocol();
-
   cppmInit();
-  LEDs(LOW);
-  while (!cppmNewValues) // get at least one good PPM frame
+  ledPeriodmS = 100;
+  while (!cppmNewValues) {// get at least one good PPM frame
     cppmGetInput();
- LEDs(HIGH);
-while(1) {};
+    checkLEDFlash();
+  }
+  LEDs(LOW);
+  
+  setProtocol();
 
   initRF(); 
 
@@ -232,7 +230,6 @@ void loop() {
   checkLEDFlash();
 
 } // loop
-
 
 
 

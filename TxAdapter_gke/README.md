@@ -7,7 +7,7 @@ available from a transmitter, to Hubsan and FlySky signals.
 Almost all of the adapter code was originally derived from the work of 
 PhracturedBlue and others for the universal transmitter "Deviation". 
 
-There have been numerous modifications, and in most cases rewrites, of 
+There have been numerous modifications, and in some cases rewrites, of 
 the original code.
 
 https://bitbucket.org/PhracturedBlue/deviation
@@ -51,7 +51,4 @@ similar preferably at 3.3V. It is possible to modify the original
 Turnigy 9X removable Tx module using its a7105 transceiver.
 
 http://www.rcgroups.com/forums/showpost.php?p=27180258&postcount=2
-
-The original bind button is used to toggle between FlySky and Hubsan protocols by 
-depressing it at power-up. 
 

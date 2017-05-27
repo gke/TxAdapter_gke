@@ -40,7 +40,7 @@ uint16_t hubsanVTXFreq;
 uint8_t chan;
 const uint8_t hubsanAllowedChannels[] = {
   0x14, 0x1e, 0x28, 0x32, 0x3c, 0x46, 0x50, 0x5a, 0x64, 0x6e, 0x78, 0x82};
-uint32_t sessionID;
+
 uint8_t hubsanPacketCount;
 uint8_t hubsanTxState, hubsanRFMode;
 
@@ -82,11 +82,13 @@ void hubsanSetBindState(uint32_t ms) {
 
 boolean hubsanSetup(void) {
   uint8_t vco_current;
-  uint32_t timeoutuS;
+  uint32_t timeoutmS;
 
+  delay(10);
   a7105Reset();
 
   a7105WriteID(0x55201041);
+  
   a7105WriteReg(A7105_01_MODE_CONTROL, 0x63);
   a7105WriteReg(A7105_03_FIFOI, 0x0f);
   a7105WriteReg(A7105_0D_CLOCK, 0x05);
@@ -104,9 +106,9 @@ boolean hubsanSetup(void) {
   a7105WriteReg(A7105_02_CALC, 1);  
   vco_current = a7105ReadReg(A7105_02_CALC);
 
-  timeoutuS = a7105SetTimeout();
+  timeoutmS = millis() + 500;
   while (a7105Busy()) 
-    if (micros() > timeoutuS) return (false);
+    if (millis() > timeoutmS) return (false);
 
   if (a7105ReadReg(A7105_22_IF_CALIB_I) & A7105_MASK_FBCF) return (false);
 
@@ -117,18 +119,18 @@ boolean hubsanSetup(void) {
   a7105WriteReg(A7105_0F_CHANNEL, 0); // set channel
   a7105WriteReg(A7105_02_CALC, 2); // VCO cal.
 
-  timeoutuS = a7105SetTimeout();
+  timeoutmS = millis() + 500;
   while (a7105Busy()) 
-    if (micros() > timeoutuS) return (false);
+    if (millis() > timeoutmS) return (false);
 
   if (a7105ReadReg(A7105_25_VCO_SBCAL_I) & A7105_MASK_VBCF) return (false);
 
   a7105WriteReg(A7105_0F_CHANNEL, 0xa0); // set channel         
   a7105WriteReg(A7105_02_CALC, 2); // VCO cal.
 
-  timeoutuS = a7105SetTimeout();
+  timeoutmS = millis() + 500;
   while (a7105Busy()) 
-    if (micros() > timeoutuS) return (false);
+    if (millis() > timeoutmS) return (false);
 
   if (a7105ReadReg(A7105_25_VCO_SBCAL_I) & A7105_MASK_VBCF) return (false);
 
@@ -145,14 +147,14 @@ boolean hubsanSetup(void) {
 static void hubsanUpdateTelemetry(void) {
   enum Tag0xe0 {
     TAG, 
-    ROC_MSB, // ?
+    ROC_MSB,
     ROC_LSB,
-    unknown_e0_3,
-    unknown_e0_4, 
-    unknown_e0_5,
-    unknown_e0_6,
-    unknown_e0_7,
-    unknown_e0_8, 
+    XUNK3,
+    XUNK4, 
+    XUNK5,
+    XUNK6,
+    XUNK7,
+    XUNK8, 
     Z_ACC_MSB, 
     Z_ACC_LSB, 
     YAW_GYRO_MSB, 
@@ -163,29 +165,29 @@ static void hubsanUpdateTelemetry(void) {
   };
 
   enum Tag0xe1 {
-    TAG_e1, 
+    TAG1, 
     PITCH_ACC_MSB,
     PITCH_ACC_LSB,
     ROLL_ACC_MSB,
     ROLL_ACC_LSB, 
-    unknown_e1_5,
-    unknown_e1_6,
+    UNK5,
+    UNK6,
     PITCH_GYRO_MSB, 
     PITCH_GYRO_LSB, 
     ROLL_GYRO_MSB, 
     ROLL_GYRO_LSB, 
-    unknown_e1_11,
-    unknown_e1_12,  
-    VBAT_e1,
-    CRC0_e1,
-    CRC1_e1
+    UNK11,
+    UNK12,  
+    //VBAT,
+    //CRC0,
+    //CRC1
   };
 
   uint8_t i;
   static uint32_t lastUpdatemS = millis();
   uint16_t intervalmS;
 
-  if ( a7105CRCCheck(16)) {
+  if( a7105CRCCheck(16)) {
     intervalmS = millis() - lastUpdatemS;
     lastUpdatemS = millis();
 
@@ -217,7 +219,7 @@ static void hubsanUpdateTelemetry(void) {
       }  
     else 
       if (DEBUG) {
-      //  if (packet[0] == 0xe0) {
+      //  if(packet[0] == 0xe0) {
       Serial.print(millis());
       Serial.print(",");
       Serial.print(packet[0], HEX);
@@ -277,12 +279,16 @@ static void hubsanBuildPacket(void) {
 
   memset(packet, 0, 16);
 
-#define VTX_STEP_SIZE 5
+#define VTX_STEP_SIZE 15
+  enum{
+    FLAG_FLIP = 0x08,
+    FLAG_LED  = 0x04,
+    FLAG_CAM = 0
+  };
 
   currentThrottle = disableThrottle ? 0 : ((int32_t)rcData[THROTTLE] * throttleLVCScale) >> 10;
 
-#if defined(USE_HUBSAN_EXTENDED)
-  if ( hubsanPacketCount == 100 ) {// set vTX frequency (H107D)
+  if( USE_HUBSAN_EXTENDED & (hubsanPacketCount == 100 )) {// set vTX frequency (H107D)
     packet[0] = 0x40;
     packet[1] = (hubsanVTXFreq >> 8) & 0xff;
     packet[2] = hubsanVTXFreq & 0xff;
@@ -290,7 +296,6 @@ static void hubsanBuildPacket(void) {
     hubsanPacketCount++;      
   } 
   else
-#endif
   { //20 00 00 00 80 00 7d 00 84 02 64 db 04 26 79 7b
     packet[0] = 0x20;
     packet[2] = currentThrottle;
@@ -298,29 +303,22 @@ static void hubsanBuildPacket(void) {
   packet[4] = 0xff - rcData[YAW];
   packet[6] = 0xff - rcData[PITCH];
   packet[8] = rcData[ROLL]; 
-
-  packet[9] = 0x20;
-
-debug[0] = rcData[AUX1];
-debug[1] = rcData[AUX2];
-
-  if (hubsanPacketCount > 100) {  // sends default value for the 100 first packets
-    enableLEDs = rcData[AUX1] > 127;
-    enableFlip = rcData[AUX2] > 127;
-    if (enableLEDs)  bitSet(packet[9], HUBSAN_LEDS_BIT);
-    if (enableFlip) bitSet(packet[9], HUBSAN_FLIP_BIT);
-  }
-  else {
-    enableLEDs = enableFlip = true;
-    hubsanPacketCount++;   
+  if (hubsanPacketCount < 100) {
+    packet[9] = 0x02 | FLAG_LED | FLAG_FLIP; // sends default value for the 100 first packets
+    hubsanPacketCount++;
+  } 
+  else { // assumes Hubsan uses -128/+127 for all channels except throttle
+    packet[9] = 0x02;
+    if(rcData[AUX1] >= HUBSAN_RC_NEUTRAL) packet[9] |= FLAG_LED;
+    if(rcData[AUX2] >= HUBSAN_RC_NEUTRAL) packet[9] |= FLAG_FLIP;
   }
 
   packet[10] = 0x64;
   // could be optimised out
-  packet[11] = (hubsanID >> 24) & 0xff;
-  packet[12] = (hubsanID >> 16) & 0xff;
-  packet[13] = (hubsanID >>  8) & 0xff;
-  packet[14] = (hubsanID >>  0) & 0xff;
+  packet[11] = (sessionID >> 24) & 0xff;
+  packet[12] = (sessionID >> 16) & 0xff;
+  packet[13] = (sessionID >>  8) & 0xff;
+  packet[14] = (sessionID >>  0) & 0xff;
 
   a7105CRCUpdate(16);
 
@@ -413,7 +411,7 @@ static uint16_t hubsanUpdate(void) {
       telemetryState = waitTx;
       break;
     case waitTx: 
-      if (a7105Busy())
+      if(a7105Busy())
         d = 0;
       else { // wait for tx completion
         Probe();
@@ -424,7 +422,7 @@ static uint16_t hubsanUpdate(void) {
       } 
       break;
     case pollRx: // check for telemetry
-      if (a7105Busy()) 
+      if(a7105Busy()) 
         d = 1000;
       else { 
         Probe();
@@ -445,7 +443,7 @@ static uint16_t hubsanUpdate(void) {
       break;
     } // switch
     break;
-  } // switch
+  }
 
   return (d);
 } // hubsanUpdate
@@ -453,26 +451,22 @@ static uint16_t hubsanUpdate(void) {
 static void hubsanInit(void) {
 
   ledPeriodmS = BIND_LED_PERIOD_MS;
-  while (!hubsanSetup()) {
-    if (DEBUG_PROTOCOL)
-      Serial.println("hubsanSetup FAIL");
-    checkLEDFlash(); 
-  }
+  while (!hubsanSetup()) 
+    checkLEDFlash();
 
-  if (DEBUG_PROTOCOL) Serial.println("hubsanSetup OK");
-
+  if (DEBUG) Serial.println("Hubsan Setup OK");
+  
+  //sessionID = hubsanID;
   sessionID = random();
-  chan = hubsanAllowedChannels[random() % sizeof(hubsanAllowedChannels)];
+  
+  chan = hubsanAllowedChannels[sessionID % sizeof(hubsanAllowedChannels)];
+  
   hubsanSetBindState(0xffffffff);
   hubsanState = BIND_1;
   hubsanPacketCount = 0;
   hubsanVTXFreq = DEFAULT_VTX_FREQ;
 
 } // hubsanInit
-
-
-
-
 
 
 

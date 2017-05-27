@@ -15,7 +15,7 @@
  You should have received a copy of the GNU General Public License 
  if not, see <http://www.gnu.org/licenses/>.
  
- */
+*/
 
 // Rx
 
@@ -37,7 +37,6 @@ void cppmInit(void) {
 
   pinMode(3, INPUT);
   attachInterrupt(1, rxInt, RISING);
-
 } // cppmInit
 
 void rxInt(void) {
@@ -51,22 +50,18 @@ void rxInt(void) {
   Width = NowuS - PrevuS;
   PrevuS = NowuS;
   if( Width > 3000) { 
-    cppNewValues = cppmFrameOK;
+    cppmNewValues = cppmFrameOK;
     cppmFrameOK = true;
     chan = 0;
   }
   else
     if (chan < RC_CHANS) { 
-      if (WidthOK(Width)) {
+      if (WidthOK(Width))
         cppmRaw[chan] = Width;
-        LEDs(HIGH);
-      } else {
+      else 
         cppmFrameOK &= false;
-         LEDs(LOW);
-      }
       chan++;
     }
-
 } // rxInt
 
 
@@ -83,14 +78,13 @@ void cppmGetInput(void) {
   uint8_t chan;
   int16_t v;
 
-
   for (chan = 0; chan < RC_CHANS; chan++) {
     noInterrupts();
     v = cppmRaw[chan];
     interrupts();
    switch(currProtocol) {    
    case hubsan: rcData[TxMap[chan]] = constrain((v >> 2) - 247, 0, 255); break;
-   case flysky: rcData[TxMap[chan]] = constrain(v - 1500 + 1497, 1000, 1994); break;
+   case flysky: rcData[TxMap[chan]] = constrain(v - 1500 + FLYSKY_RC_NEUTRAL, FLYSKY_RC_MIN, FLYSKY_RC_MAX); break;
    default: break;
    } // switch;
   }
