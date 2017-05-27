@@ -37,6 +37,7 @@ void cppmInit(void) {
 
   pinMode(3, INPUT);
   attachInterrupt(1, rxInt, RISING);
+
 } // cppmInit
 
 void rxInt(void) {
@@ -50,18 +51,22 @@ void rxInt(void) {
   Width = NowuS - PrevuS;
   PrevuS = NowuS;
   if( Width > 3000) { 
-    cppmNewValues = cppmFrameOK;
+    cppNewValues = cppmFrameOK;
     cppmFrameOK = true;
     chan = 0;
   }
   else
     if (chan < RC_CHANS) { 
-      if (WidthOK(Width))
+      if (WidthOK(Width)) {
         cppmRaw[chan] = Width;
-      else 
+        LEDs(HIGH);
+      } else {
         cppmFrameOK &= false;
+         LEDs(LOW);
+      }
       chan++;
     }
+
 } // rxInt
 
 
@@ -77,6 +82,7 @@ void cppmGetInput(void) {
 
   uint8_t chan;
   int16_t v;
+
 
   for (chan = 0; chan < RC_CHANS; chan++) {
     noInterrupts();

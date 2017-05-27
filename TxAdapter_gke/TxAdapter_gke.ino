@@ -202,7 +202,8 @@ void setup() {
   LEDs(LOW);
   while (!cppmNewValues) // get at least one good PPM frame
     cppmGetInput();
-  LEDs(HIGH);
+ LEDs(HIGH);
+while(1) {};
 
   initRF(); 
 
